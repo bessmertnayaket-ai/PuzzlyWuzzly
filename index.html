@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ФотоПазл: Собери своё изображение!</title>
+  <style>
+    :root{--gap:6px}
+    body{
+      font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+      display:flex;gap:20px;flex-direction:column;align-items:center;
+      padding:24px;background:#f6f7fb;color:#111
+    }
+    h1{font-size:18px;margin:0 0 8px}
+    .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    button,input,select{padding:8px 10px;border-radius:8px;border:1px solid #ddd;background:white}
+    #game-wrapper{
+      position: relative;
+      width:min(640px,90vw);
+      aspect-ratio:1/1;
+    }
+    #game{
+      width:100%;height:100%;
+      display:grid;
+      background:#e9eef8;
+      border-radius:12px;
+      padding:var(--gap);
+      box-shadow:0 4px 14px rgba(20,30,60,0.06)
+    }
+    .tile{
+      background-repeat:no-repeat;
+      border-radius:8px;
+      cursor:pointer;user-select:none;
+      border:none;padding:0;
+    }
+    .tile.selected{outline:4px solid rgba(0,120,255,0.12);box-shadow:0 6px 18px rgba(0,0,0,0.08)}
+    .meta{display:flex;gap:12px;align-items:center;margin-top:8px}
+    .hint{font-size:13px;color:#556}
+    #overlay{
+      position:absolute;top:0;left:0;width:100%;height:100%;
+      border-radius:12px;
+      background-size:cover;
+      background-position:center;
+      opacity:0;
+      transition:opacity 1s ease;
+      pointer-events:none;
+    }
+    @media (max-width:520px){:root{--gap:4px}.controls{flex-direction:column;align-items:stretch}}
+  </style>
+</head>
+<body>
+  <h1>ФотоПазл: Собери своё изображение!</h1>
+  <div class="controls">
+    <label style="display:flex;gap:8px;align-items:center">
+      <span>Размер:</span>
+      <select id="size">
+        <option value="4">4 × 4</option>
+        <option value="5">5 × 5</option>
+        <option value="6">6 × 6</option>
+      </select>
+    </label>
+    <button id="shuffleBtn">Перемешать</button>
+    <button id="resetBtn">Сброс</button>
+  </div>
+
+  <div id="game-wrapper">
+    <div id="game" aria-label="Пазл" role="application"></div>
+    <div id="overlay"></div>
+  </div>
+  <div class="meta">
+    <div class="hint">Кликни по двум плиткам, чтобы поменять их местами.</div>
+    <div id="status" style="margin-left:auto;font-weight:600"></div>
+  </div>
+
+  <script>
+    const game = document.getElementById('game');
+    const sizeSelect = document.getElementById('size');
+    const shuffleBtn = document.getElementById('shuffleBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const status = document.getElementById('status');
+    const overlay = document.getElementById('overlay');
+
+    let imgDataUrl = "puzzle.jpg";   // картинка для пазла
+    let hiddenImgUrl = "hidden.jpg"; // секретная картинка
+
+    let N = parseInt(sizeSelect.value,10);
+    let tiles = [];
+    let selected = null;
+    let solved = false;
+
+    function buildGrid(){
+      game.innerHTML='';
+      N = parseInt(sizeSelect.value,10);
+      game.style.gridTemplateColumns = `repeat(${N}, 1fr)`;
+      game.style.gridTemplateRows = `repeat(${N}, 1fr)`;
+      tiles = [];
+      solved = false;
+      status.textContent = '';
+      overlay.style.opacity = 0;
+
+      for(let r=0;r<N;r++){
+        for(let c=0;c<N;c++){
+          const idx = r*N + c;
+          const el = document.createElement('button');
+          el.className='tile';
+          el.dataset.index = idx;
+          el.style.backgroundImage = `url('${imgDataUrl}')`;
+          el.style.backgroundSize = `${N*100}% ${N*100}%`;
+          el.style.backgroundPosition = `${(c/(N-1))*100}% ${(r/(N-1))*100}%`;
+          el.addEventListener('click', onTileClick);
+          game.appendChild(el);
+          tiles.push({origIndex: idx, currIndex: idx, el});
+        }
+      }
+      shuffle(200);
+    }
+
+    function onTileClick(e){
+      if(solved) return;
+      const btn = e.currentTarget;
+      const tile = tiles.find(t => t.el === btn);
+      if(!tile) return;
+      if(selected === null){
+        selected = tile;
+        tile.el.classList.add('selected');
+      } else if(selected === tile){
+        selected.el.classList.remove('selected');
+        selected = null;
+      } else {
+        swapTiles(selected, tile);
+        selected.el.classList.remove('selected');
+        selected = null;
+        checkSolved();
+      }
+    }
+
+    function swapTiles(a,b){
+      const aPos = a.el.style.backgroundPosition;
+      const bPos = b.el.style.backgroundPosition;
+      a.el.style.backgroundPosition = bPos;
+      b.el.style.backgroundPosition = aPos;
+      const temp = a.currIndex; a.currIndex = b.currIndex; b.currIndex = temp;
+    }
+
+    function shuffle(nTimes=100){
+      for(let i=0;i<nTimes;i++){
+        const a = tiles[Math.floor(Math.random()*tiles.length)];
+        const b = tiles[Math.floor(Math.random()*tiles.length)];
+        if(a!==b) swapTiles(a,b);
+      }
+      status.textContent = 'Перемешано';
+    }
+
+    function checkSolved(){
+      let ok = true;
+      for(let i=0;i<tiles.length;i++){
+        if(tiles[i].currIndex !== tiles[i].origIndex){ ok = false; break; }
+      }
+      if(ok){
+        status.textContent = 'Собрано! 🎉';
+        solved = true;
+        overlay.style.backgroundImage = `url('${hiddenImgUrl}')`;
+        overlay.style.opacity = 1;
+      }
+    }
+
+    sizeSelect.addEventListener('change', buildGrid);
+    shuffleBtn.addEventListener('click', ()=>shuffle(200));
+    resetBtn.addEventListener('click', buildGrid);
+
+    buildGrid();
+  </script>
+</body>
+</html>
